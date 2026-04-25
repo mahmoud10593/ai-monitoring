@@ -1,0 +1,8 @@
+E:
+cd "New folder\ai-monitor"
+
+
+venv\Scripts\activate
+
+
+python -m uvicorn app.main:app --reload

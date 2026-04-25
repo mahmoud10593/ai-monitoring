@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Etmam AI Monitor</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body {
+    margin:0;
+    font-family:"Segoe UI";
+    background: radial-gradient(circle,#0f172a,#020617);
+    color:white;
+}
+
+.container {
+    padding:30px;
+    max-width:1200px;
+    margin:auto;
+}
+
+.header {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+}
+
+.logo {
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+.logo img {height:45px;}
+.logo h2 {color:#38bdf8;}
+
+.actions {
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+}
+
+.btn {
+    background:#38bdf8;
+    border:none;
+    padding:8px 12px;
+    border-radius:8px;
+    cursor:pointer;
+}
+
+.btn:hover {background:#0ea5e9;}
+
+.danger {background:#ef4444;}
+.danger:hover {background:#dc2626;}
+
+.input-box {
+    display:flex;
+    gap:10px;
+    margin-top:20px;
+    flex-wrap:wrap;
+}
+
+.input-box input {
+    flex:1;
+    min-width:250px;
+    padding:10px;
+    border-radius:8px;
+    border:none;
+    background:#020617;
+    color:white;
+    border:1px solid #1e293b;
+}
+
+table {
+    width:100%;
+    margin-top:20px;
+    border-collapse:collapse;
+}
+
+td,th {
+    padding:12px;
+    border-bottom:1px solid #1e293b;
+}
+
+tr:hover {background:rgba(255,255,255,0.05);}
+
+.badge {
+    padding:5px 10px;
+    border-radius:20px;
+    font-size:12px;
+}
+
+.green {background:#22c55e33; color:#22c55e;}
+.yellow {background:#facc1533; color:#facc15;}
+.red {background:#ef444433; color:#ef4444;}
+
+.icon {
+    cursor:pointer;
+    margin-right:10px;
+}
+
+/* Modal */
+.modal {
+    display:none;
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.6);
+    justify-content:center;
+    align-items:center;
+}
+
+.modal-content {
+    background:#020617;
+    padding:20px;
+    border-radius:10px;
+    width:300px;
+}
+
+/* Responsive */
+@media (max-width:768px){
+    .header {
+        flex-direction:column;
+        align-items:flex-start;
+        gap:15px;
+    }
+
+    table {
+        display:block;
+        overflow-x:auto;
+        white-space:nowrap;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="header">
+    <div class="logo">
+        <img src="https://www.e-tec.sa/wp-content/uploads/2024/05/logo.png">
+        <h2>Etmam AI Monitor</h2>
+    </div>
+
+    <div class="actions">
+        <button class="btn" onclick="toggleLive()" id="liveBtn">🟢 Live</button>
+        <button class="btn" onclick="openSettings()">⚙️ Settings</button>
+        <button class="btn danger" onclick="clearAll()">🧹 Clear</button>
+        <button class="btn" onclick="logout()">Logout</button>
+    </div>
+</div>
+
+<div class="input-box">
+    <input id="urlInput" placeholder="https://example.com">
+    <button class="btn" onclick="addWebsite()">Add</button>
+    <button class="btn" onclick="document.getElementById('fileInput').click()">📂 Import</button>
+    <input type="file" id="fileInput" hidden onchange="importExcel(event)">
+</div>
+
+<table>
+<thead>
+<tr>
+<th>URL</th>
+<th>Status</th>
+<th>SSL</th>
+<th>Time</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody id="tableBody"></tbody>
+</table>
+
+</div>
+
+<!-- SETTINGS MODAL -->
+<div id="settingsModal" class="modal">
+    <div class="modal-content">
+        <h3>⚙️ Settings</h3>
+
+        <label>Refresh Interval (seconds)</label>
+        <input type="number" id="intervalInput" min="1">
+
+        <br><br>
+
+        <button class="btn" onclick="saveSettings()">Save</button>
+        <button class="btn danger" onclick="closeSettings()">Close</button>
+    </div>
+</div>
+
+<script>
+const API="http://127.0.0.1:8000";
+
+let live = true;
+let interval;
+let refreshTime = localStorage.getItem("interval") || 10;
+
+function startLive(){
+    interval = setInterval(refreshStatuses, refreshTime * 1000);
+}
+
+function stopLive(){
+    clearInterval(interval);
+}
+
+function toggleLive(){
+    live = !live;
+    let btn = document.getElementById("liveBtn");
+
+    if(live){
+        startLive();
+        btn.innerText = "🟢 Live";
+        btn.style.background = "#22c55e";
+    }else{
+        stopLive();
+        btn.innerText = "⏸ Paused";
+        btn.style.background = "#ef4444";
+    }
+}
+
+function openSettings(){
+    document.getElementById("settingsModal").style.display="flex";
+    document.getElementById("intervalInput").value = refreshTime;
+}
+
+function closeSettings(){
+    document.getElementById("settingsModal").style.display="none";
+}
+
+function saveSettings(){
+    let val = document.getElementById("intervalInput").value;
+
+    if(val < 1) return alert("Invalid value");
+
+    refreshTime = val;
+    localStorage.setItem("interval", val);
+
+    stopLive();
+    startLive();
+
+    closeSettings();
+}
+
+async function clearAll(){
+    if(!confirm("Delete ALL websites?")) return;
+
+    await fetch(`${API}/clear`);
+    loadWebsites();
+}
+
+function logout(){
+    localStorage.removeItem("loggedIn");
+    location.href="login.html";
+}
+
+async function loadWebsites(){
+    let res=await fetch(API+"/websites");
+    let data=await res.json();
+
+    let table=document.getElementById("tableBody");
+    table.innerHTML="";
+
+    data.forEach(site=>{
+        let row=document.createElement("tr");
+
+        row.innerHTML=`
+        <td>${site.url}</td>
+        <td id="status-${site.id}">...</td>
+        <td id="ssl-${site.id}">...</td>
+        <td id="time-${site.id}">-</td>
+        <td>
+            <span class="icon" onclick="editSite(${site.id},'${site.url}')">✏️</span>
+            <span class="icon" onclick="deleteSite(${site.id})">🗑️</span>
+        </td>
+        `;
+
+        table.appendChild(row);
+        checkSite(site.url,site.id);
+    });
+}
+
+async function refreshStatuses(){
+    document.querySelectorAll("#tableBody tr").forEach(row=>{
+        let url=row.children[0].textContent.trim();
+        let id=row.querySelector("[id^='status-']").id.split("-")[1];
+        checkSite(url,id);
+    });
+}
+
+async function addWebsite(){
+    let url=urlInput.value;
+    await fetch(`${API}/add?url=${url}`);
+    loadWebsites();
+}
+
+async function deleteSite(id){
+    await fetch(`${API}/delete?id=${id}`);
+    loadWebsites();
+}
+
+function editSite(id,url){
+    let newUrl=prompt("Edit URL:",url);
+    if(newUrl){
+        fetch(`${API}/update?id=${id}&url=${newUrl}`).then(loadWebsites);
+    }
+}
+
+async function checkSite(url,id){
+    let res=await fetch(`${API}/check?url=${url}`);
+    let data=await res.json();
+
+    let s=data.monitoring;
+
+    let statusEl=document.getElementById(`status-${id}`);
+    let sslEl=document.getElementById(`ssl-${id}`);
+    let timeEl=document.getElementById(`time-${id}`);
+
+    if(s.status===null){
+        statusEl.innerHTML=`<span class="badge red">Down</span>`;
+    }else if(s.response_time>3){
+        statusEl.innerHTML=`<span class="badge yellow">Slow</span>`;
+    }else{
+        statusEl.innerHTML=`<span class="badge green">Healthy</span>`;
+    }
+
+    if(!s.has_ssl){
+        sslEl.innerHTML=`<span class="badge yellow">No SSL</span>`;
+    }else if(s.ssl_valid===false){
+        sslEl.innerHTML=`<span class="badge red">Expired</span>`;
+    }else{
+        sslEl.innerHTML=`<span class="badge green">Valid</span>`;
+    }
+
+    timeEl.innerText=s.response_time ? s.response_time+"s" : "-";
+}
+
+function importExcel(event){
+    let file=event.target.files[0];
+    let reader=new FileReader();
+
+    reader.onload=function(e){
+        let lines=e.target.result.split("\n");
+
+        lines.forEach(url=>{
+            url=url.trim();
+            if(url && url.includes(".")){
+                fetch(`${API}/add?url=${url}`);
+            }
+        });
+
+        setTimeout(loadWebsites,1000);
+    };
+
+    reader.readAsText(file);
+}
+
+if(live) startLive();
+loadWebsites();
+</script>
+
+</body>
+</html>
